@@ -3,6 +3,18 @@
 
 #include <WProgram.h>
 
+
+#define BIT_SET(w, b)   (w) |= 1<<(b)
+#define BIT_CLR(w, b)   (w) &= ~(1<<(b))
+#define BIT_VAL(w, b)   (((w) & (1<<(b))) >> (b))
+
+#define SREG_C   0
+#define SREG_Z   1
+#define SREG_N   2
+#define SREG_V   3
+#define SREG_S   4
+
+
 class BlinkenBoxInstance {
 
   public:
