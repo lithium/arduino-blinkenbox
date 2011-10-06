@@ -16,7 +16,7 @@ BlinkenBoxInstance::BlinkenBoxInstance()
 
   //initialize the internal registers
   SP_ = 0x01FF;
-  PC_ = 0x0000; 
+  PC_ = 0x0000;
 
 }
 
@@ -47,9 +47,9 @@ void BlinkenBoxInstance::run_one_instruction()
 
     //
     // some opcodes are only 4 bits wide, test for those first
-    // 0xA*, 0xB*, 0xC*, 0xE*, 0x3*, 0x4*, 0x5*, 0x6*, 0x7*
+    // 0x40 .. 0xBF
     byte opcode = (*instruction) & 0xF0;
-    if (opcode >= 0xA0 && opcode <= 0xC0 && opcode >= 0x30 && opcode <= 0x70) {
+    if (opcode >= 0x40 && opcode <= 0xBF) {
         byte d = (*instruction) & 0x0F;
         byte *Rd = &REG_[d];
         byte *k = fetch_instruction_byte();
@@ -58,34 +58,23 @@ void BlinkenBoxInstance::run_one_instruction()
         }
 
         switch (opcode) {
-            case 0x30: //CPI 
+            case 0x40: //LDI
             {
-                byte result = *Rd - *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (result == 0));
-                BIT_SET(SREG_, SREG_C, (*k > *Rd));
+                *Rd = *k;
                 return;
             }
 
-            case 0x40: //SBCI
+            case 0x50: //LDD
             {
-                *Rd -= *k - BIT_VAL(SREG_, SREG_C);
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                if (*Rd != 0) BIT_SET(SREG_, SREG_Z, 0);
-                BIT_SET(SREG_, SREG_C, (*k + BIT_VAL(SREG_,SREG_C) > *Rd));
                 return;
             }
 
-            case 0x50: //SUBI
+            case 0x60: //STD
             {
-                *Rd -= *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (*Rd == 0));
-                BIT_SET(SREG_, SREG_C, (*k > *Rd));
                 return;
             }
 
-            case 0x60: //ORI
+            case 0x70: //ORI
             {
                 *Rd |= *k;
                 BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
@@ -94,7 +83,7 @@ void BlinkenBoxInstance::run_one_instruction()
             }
 
 
-            case 0x70: //ANDI
+            case 0x80: //ANDI
             {
                 *Rd &= *k;
                 BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
@@ -102,26 +91,33 @@ void BlinkenBoxInstance::run_one_instruction()
                 return;
             }
 
-            case 0xA0: //LDS
+            case 0x90: //SUBI
             {
-                byte *v = access_memory( (REG_[0xF] << 8) | (*k) );
-                *Rd = *v;
+                *Rd -= *k;
+                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                BIT_SET(SREG_, SREG_Z, (*Rd == 0));
+                BIT_SET(SREG_, SREG_C, (*k > *Rd));
                 return;
             }
 
-            case 0xB0: //LDI
+            case 0xA0: //SBCI
             {
-                *Rd = *k;
+                *Rd -= *k - BIT_VAL(SREG_, SREG_C);
+                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                if (*Rd != 0) BIT_SET(SREG_, SREG_Z, 0);
+                BIT_SET(SREG_, SREG_C, (*k + BIT_VAL(SREG_,SREG_C) > *Rd));
                 return;
             }
 
-            case 0xC0: //STS
+
+            case 0xB0: //CPI 
             {
-                byte *v = access_memory( (REG_[0xF] << 8) | (*k) );
-                *v = *Rd;
+                byte result = *Rd - *k;
+                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                BIT_SET(SREG_, SREG_Z, (result == 0));
+                BIT_SET(SREG_, SREG_C, (*k > *Rd));
                 return;
             }
-
 
             default:
                 return invalid_opcode(*instruction);

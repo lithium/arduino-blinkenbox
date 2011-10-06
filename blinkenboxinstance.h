@@ -28,10 +28,9 @@ class BlinkenBoxInstance {
 
     int SP_;
     int PC_;
-    char R_[16];   // 16 8bit registers
-    char SREG_;
-    
-    byte *MEMORY_[16];  // 16 possible memory pages
+    char R_[16];        // 16x 8bit registers
+    char SREG_;         // special register
+    byte *MEMORY_[16];  // 16x possible memory pages
     
     
     
