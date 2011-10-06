@@ -66,19 +66,32 @@ void BlinkenBoxInstance::run_one_instruction()
 
             case 0x50: //LDD
             {
+                int addr = ((REG_[0xF] << 8) | (REG_[0xE])) + *k;
+                byte *mem = access_memory(addr);
+                if (!mem)
+                    return segfault(addr);
+                *Rd = *mem;
                 return;
             }
 
             case 0x60: //STD
             {
+                int addr = ((REG_[0xF] << 8) | (REG_[0xE])) + *k;
+                byte *mem = access_memory(addr);
+                if (!mem)
+                    return segfault(addr);
+                *mem = *Rd;
                 return;
             }
 
             case 0x70: //ORI
             {
                 *Rd |= *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (*Rd == 0));
+
+                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
+                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                BIT_CLR(SREG_, SREG_V);
+                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
                 return;
             }
 
@@ -86,26 +99,34 @@ void BlinkenBoxInstance::run_one_instruction()
             case 0x80: //ANDI
             {
                 *Rd &= *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (*Rd == 0));
+
+                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
+                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                BIT_CLR(SREG_, SREG_V);
+                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
                 return;
             }
 
             case 0x90: //SUBI
             {
                 *Rd -= *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (*Rd == 0));
-                BIT_SET(SREG_, SREG_C, (*k > *Rd));
+
+                BIT_UP(SREG_, SREG_C, (*k > *Rd));
+                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
+                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                // SREG_V
+                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
+
                 return;
             }
 
             case 0xA0: //SBCI
             {
                 *Rd -= *k - BIT_VAL(SREG_, SREG_C);
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                if (*Rd != 0) BIT_SET(SREG_, SREG_Z, 0);
-                BIT_SET(SREG_, SREG_C, (*k + BIT_VAL(SREG_,SREG_C) > *Rd));
+
+                //BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                //if (*Rd != 0) BIT_SET(SREG_, SREG_Z, 0);
+                //BIT_SET(SREG_, SREG_C, (*k + BIT_VAL(SREG_,SREG_C) > *Rd));
                 return;
             }
 
@@ -113,9 +134,10 @@ void BlinkenBoxInstance::run_one_instruction()
             case 0xB0: //CPI 
             {
                 byte result = *Rd - *k;
-                BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                BIT_SET(SREG_, SREG_Z, (result == 0));
-                BIT_SET(SREG_, SREG_C, (*k > *Rd));
+
+                //BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                //BIT_SET(SREG_, SREG_Z, (result == 0));
+                //BIT_SET(SREG_, SREG_C, (*k > *Rd));
                 return;
             }
 

@@ -8,6 +8,8 @@
 #define BIT_CLR(w, b)   (w) &= ~(1<<(b))
 #define BIT_VAL(w, b)   (((w) & (1<<(b))) >> (b))
 
+#define BIT_UP(w, b, v)   if ((v)) BIT_SET((w),(b)); else BIT_CLR((w),(b))
+
 #define SREG_C   0
 #define SREG_Z   1
 #define SREG_N   2
