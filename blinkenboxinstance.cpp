@@ -151,26 +151,18 @@ void BlinkenBoxInstance::run_one_instruction()
 
     // these instructions all have no operand byte
     switch (*instruction) {
-        case 0x00: // HALT
+        case 0x0A: // HALT
         {
             running_ = 0;
             return;
         }
 
-        case 0xFF: // NOP
+        case 0x00: // NOP
         {
             return;
         }
 
-        case 0xE6: // RET
-        {
-            byte l = pop_stack();
-            byte h = pop_stack();
-            PC_ = (h<<8)|l;
-            return;
-        }
-
-        case 0xE2: // ICALL
+        case 0x01: // ICALL
         {
             push_stack((PC_ & 0xFF00) >> 8);
             push_stack(PC_ & 0x00FF);
@@ -178,11 +170,20 @@ void BlinkenBoxInstance::run_one_instruction()
             return;
         }
 
-        case 0xE3: // IJMP
+        case 0x02: // IJMP
         {
             PC_ = REG_Z;
             return;
         }
+
+        case 0x03: // RET
+        {
+            byte l = pop_stack();
+            byte h = pop_stack();
+            PC_ = (h<<8)|l;
+            return;
+        }
+
     }
 
     // remaining instructions all have an operand byte
@@ -400,6 +401,99 @@ void BlinkenBoxInstance::run_one_instruction()
             return;
         }
 
+
+
+        case 0x30: // MOV
+        {
+            *Rd = REG_[r];
+
+            return;
+        }
+
+        case 0x31: // LD 
+        {
+            byte *mem = (byte*)access_memory(REG_Z);
+            if (mem == 0) {
+                return segfault(REG_Z);
+            }
+            *Rd = *mem;
+
+            return;
+        }
+
+        case 0x33: // ST 
+        {
+            byte *mem = (byte*)access_memory(REG_Z);
+            if (mem == 0) {
+                return segfault(REG_Z);
+            }
+            *mem = *Rd;
+            return;
+        }
+
+
+        case 0x35: // PUSH
+        {
+            push_stack(*Rd);
+            return;
+        }
+
+        case 0x36: // POP
+        {
+            *Rd = pop_stack();
+            return;
+        }
+
+
+
+        case 0xC0: // CP
+        {
+            byte result = *Rd - REG_[r];
+
+            UPDATE_SREG_CARRY(*Rd, REG_[r], result);
+            UPDATE_SREG_ZERO(result);
+            UPDATE_SREG_NEG(result);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(*Rd, REG_[r], result);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0xC1: // CPC
+        {
+            byte result = *Rd - REG_[r] - BIT_VAL(SREG_, SREG_C);
+
+            UPDATE_SREG_CARRY(*Rd, REG_[r], result);
+            UPDATE_SREG_ZERO(result);
+            UPDATE_SREG_NEG(result);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(*Rd, REG_[r], result);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0xC2: // CPSE
+        {
+            if (*Rd = REG_[r]) {
+                skip_next_instruction();
+            }
+            return;
+        }
+
+        case 0xC3: // SBRC
+        {
+            if (BIT_VAL(*Rd, r & 0x7) == 0) {
+                skip_next_instruction();
+            }
+            return;
+        }
+
+        case 0xC4: // SBRS
+        {
+            if (BIT_VAL(*Rd, r & 0x7) == 1) {
+                skip_next_instruction();
+            }
+            return;
+        }
+
     }
 
     return invalid_opcode(*instruction);
@@ -444,6 +538,21 @@ byte *BlinkenBoxInstance::fetch_instruction_byte()
     }
     PC_ += 1;
     return instruction;
+}
+
+void BlinkenBoxInstance::skip_next_instruction()
+{
+    byte *instruction = (byte *)access_memory(PC_);
+    if (instruction == 0) {
+        return; // segfault
+    }
+    // all instructions except 0* have an operand byte
+
+    if ((*instruction & 0xF0) == 0) {
+        PC_ += 1;
+    }
+    PC_ += 1;
+    
 }
 
 

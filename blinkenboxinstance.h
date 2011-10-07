@@ -70,6 +70,7 @@ class BlinkenBoxInstance {
     byte pop_stack();
 
     void run_one_instruction();
+    void skip_next_instruction();
 
     void invalid_opcode(byte opcode);
     void segfault(int address);
