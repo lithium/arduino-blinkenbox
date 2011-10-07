@@ -25,7 +25,7 @@
     (BIT_VAL((Rd), 7) & ~BIT_VAL((K), 7) & ~BIT_VAL((R), 7)) \
   | (~BIT_VAL((Rd), 7) & BIT_VAL((K), 7) & BIT_VAL((R), 7)))
 // N xor C (for N and C after the shift)
-#define UPDATE_SREG_OVERFLOW_NXORC()      BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_C))
+#define UPDATE_SREG_OVERFLOW_NXORC()      BIT_UP(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_C))
 // set SREG_C if the absolute value of K is larger than the absolute value of Rd; cleared othwerise.
 #define UPDATE_SREG_CARRY(Rd, K, R)             BIT_UP(SREG_, SREG_C, \
     (~BIT_VAL((Rd), 7) & BIT_VAL((K), 7)) \
@@ -36,7 +36,7 @@
 // set if MSB of the result is set; cleared otherwise.
 #define UPDATE_SREG_NEG(R)      BIT_UP(SREG_, SREG_N, BIT_VAL((R),7))
 // N xor V, for signed tests.
-#define UPDATE_SREG_SIGN()      BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V))
+#define UPDATE_SREG_SIGN()      BIT_UP(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V))
 
 //previous value remains unchanged when the result is zero; cleared otherwise.
 #define UPDATE_SREG_ZERO_IFCHANGED(R)      if ((R) != 0) BIT_CLR(SREG_, SREG_Z)
@@ -55,8 +55,8 @@ class BlinkenBoxInstance {
 
     int SP_;
     int PC_;
-    char R_[16];        // 16x 8bit registers
-    char SREG_;         // special register
+    byte REG_[16];        // 16x 8bit registers
+    byte SREG_;         // special register
     byte *MEMORY_[16];  // 16x possible memory pages
     
     

@@ -49,9 +49,9 @@ void BlinkenBoxInstance::run_one_instruction()
     // 0x40 .. 0xBF
     byte opcode = (*instruction) & 0xF0;
     if (opcode >= 0x40 && opcode <= 0xBF) {
-        byte d = (*instruction) & 0x0F;
+        byte d = (byte)(*instruction) & 0x0F;
         byte *Rd = &REG_[d];
-        byte *k = fetch_instruction_byte();
+        byte *k = (byte*)fetch_instruction_byte();
         if (k == 0) { 
             return segfault(PC_);
         }
@@ -66,7 +66,7 @@ void BlinkenBoxInstance::run_one_instruction()
             case 0x50: //LDD
             {
                 int addr = REG_Z + *k;
-                byte *mem = access_memory(addr);
+                byte *mem = (byte*)access_memory(addr);
                 if (!mem)
                     return segfault(addr);
                 *Rd = *mem;
@@ -76,7 +76,7 @@ void BlinkenBoxInstance::run_one_instruction()
             case 0x60: //STD
             {
                 int addr = REG_Z + *k;
-                byte *mem = access_memory(addr);
+                byte *mem = (byte*)access_memory(addr);
                 if (!mem)
                     return segfault(addr);
                 *mem = *Rd;
@@ -174,13 +174,13 @@ void BlinkenBoxInstance::run_one_instruction()
         {
             push_stack((PC_ & 0xFF00) >> 8);
             push_stack(PC_ & 0x00FF);
-            PC_ = REG_Z + *k;
+            PC_ = REG_Z;
             return;
         }
 
         case 0xE3: // IJMP
         {
-            PC_ = REG_Z + *k;
+            PC_ = REG_Z;
             return;
         }
     }
@@ -189,6 +189,7 @@ void BlinkenBoxInstance::run_one_instruction()
     byte *operand = fetch_instruction_byte();
     byte d = (*operand & 0xF0) >> 4;
     byte r = (*operand & 0x0F);
+    byte *Rd = &REG_[d];
 
     switch (*instruction) {
         case 0x10: // LSL
@@ -203,7 +204,7 @@ void BlinkenBoxInstance::run_one_instruction()
             UPDATE_SREG_SIGN();
             return;
         }
-git@gist.github.com:1257596.git
+
         case 0x11: // LSR
         {
             byte old = *Rd;
@@ -421,7 +422,7 @@ void *BlinkenBoxInstance::access_system_memory(int offset)
 {
   // F0..FF map to the registers
   if (offset >= 0xF0) {
-    return &R_[(offset - 0xF0)];
+    return &REG_[(offset - 0xF0)];
   }
   
   switch (offset) {
