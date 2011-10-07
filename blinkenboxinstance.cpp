@@ -494,7 +494,55 @@ void BlinkenBoxInstance::run_one_instruction()
             return;
         }
 
+
+        case 0xD0: // RCALL
+        {
+            push_stack((PC_ & 0xFF00) >> 8);
+            push_stack(PC_ & 0x00FF);
+            PC_ += (signed byte)r;
+            return;
+        }
+
+        case 0xD1: // RJUMP
+        {
+            PC_ += (signed byte)r;
+            return;
+        }
+
+        case 0xD2: // CALL
+        {
+            push_stack((PC_ & 0xFF00) >> 8);
+            push_stack(PC_ & 0x00FF);
+            PC_ = REG_Z + (signed byte)r;
+            return;
+        }
+
+        case 0xD3: // JUMP
+        {
+            PC_ = REG_Z + (signed byte)r;
+            return;
+        }
+
     }
+
+    // BR** has the bit number encoded in 0x0F
+    if ((*instruction & 0xF0) == 0xE0) {
+        byte bitno = *instruction & 0x0F;
+        byte val = BIT_VAL(SREG_, bitno % 8);
+        if (bitno > 7) { // bit cleared test, so invert test
+            val = !val;
+        }
+        if (val) {
+            PC_ += (signed byte)r;
+        }
+    }
+
+    // SE* and CL* have the bit number encoded in 0x0F
+    if ((*instruction & 0xF0) == 0xF0) {
+        byte bitno = *instruction & 0x0F;
+        BIT_UP(SREG_, bitno % 8, bitno > 7 ? 0 : 1);
+    }
+
 
     return invalid_opcode(*instruction);
 }
