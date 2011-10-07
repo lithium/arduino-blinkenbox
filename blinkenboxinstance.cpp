@@ -45,8 +45,7 @@ void BlinkenBoxInstance::run_one_instruction()
         return segfault(PC_);
     }
 
-    //
-    // some opcodes are only 4 bits wide, test for those first
+    // test for opcodes with 4 bit instructions, 4 bit register, and 8 bit constant operand
     // 0x40 .. 0xBF
     byte opcode = (*instruction) & 0xF0;
     if (opcode >= 0x40 && opcode <= 0xBF) {
@@ -66,7 +65,7 @@ void BlinkenBoxInstance::run_one_instruction()
 
             case 0x50: //LDD
             {
-                int addr = ((REG_[0xF] << 8) | (REG_[0xE])) + *k;
+                int addr = REG_Z + *k;
                 byte *mem = access_memory(addr);
                 if (!mem)
                     return segfault(addr);
@@ -76,7 +75,7 @@ void BlinkenBoxInstance::run_one_instruction()
 
             case 0x60: //STD
             {
-                int addr = ((REG_[0xF] << 8) | (REG_[0xE])) + *k;
+                int addr = REG_Z + *k;
                 byte *mem = access_memory(addr);
                 if (!mem)
                     return segfault(addr);
@@ -88,56 +87,59 @@ void BlinkenBoxInstance::run_one_instruction()
             {
                 *Rd |= *k;
 
-                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
-                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                UPDATE_SREG_ZERO(*Rd);
+                UPDATE_SREG_NEG(*Rd);
                 BIT_CLR(SREG_, SREG_V);
-                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
+                UPDATE_SREG_SIGN();
                 return;
             }
-
 
             case 0x80: //ANDI
             {
                 *Rd &= *k;
 
-                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
-                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
+                UPDATE_SREG_ZERO(*Rd);
+                UPDATE_SREG_NEG(*Rd);
                 BIT_CLR(SREG_, SREG_V);
-                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
+                UPDATE_SREG_SIGN();
                 return;
             }
 
             case 0x90: //SUBI
             {
+                byte old = *Rd;
                 *Rd -= *k;
 
-                BIT_UP(SREG_, SREG_C, (*k > *Rd));
-                BIT_UP(SREG_, SREG_Z, (*Rd == 0));
-                BIT_UP(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                // SREG_V
-                BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V));
-
+                UPDATE_SREG_CARRY(old, *k, *Rd);
+                UPDATE_SREG_ZERO(*Rd);
+                UPDATE_SREG_NEG(*Rd);
+                UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, *k, *Rd);
+                UPDATE_SREG_SIGN();
                 return;
             }
 
             case 0xA0: //SBCI
             {
+                byte old = *Rd;
                 *Rd -= *k - BIT_VAL(SREG_, SREG_C);
 
-                //BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                //if (*Rd != 0) BIT_SET(SREG_, SREG_Z, 0);
-                //BIT_SET(SREG_, SREG_C, (*k + BIT_VAL(SREG_,SREG_C) > *Rd));
+                UPDATE_SREG_CARRY(old, *k, *Rd);
+                UPDATE_SREG_ZERO_IFCHANGED(*Rd);
+                UPDATE_SREG_NEG(*Rd);
+                UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, *k, *Rd);
+                UPDATE_SREG_SIGN();
                 return;
             }
-
 
             case 0xB0: //CPI 
             {
                 byte result = *Rd - *k;
 
-                //BIT_SET(SREG_, SREG_N, BIT_VAL(*Rd, 7));
-                //BIT_SET(SREG_, SREG_Z, (result == 0));
-                //BIT_SET(SREG_, SREG_C, (*k > *Rd));
+                UPDATE_SREG_CARRY(*Rd, *k, result);
+                UPDATE_SREG_ZERO(result);
+                UPDATE_SREG_NEG(result);
+                UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(*Rd, *k, result);
+                UPDATE_SREG_SIGN();
                 return;
             }
 
@@ -160,18 +162,25 @@ void BlinkenBoxInstance::run_one_instruction()
             return;
         }
 
-        case 0xDD: // RET
+        case 0xE6: // RET
         {
+            byte l = pop_stack();
+            byte h = pop_stack();
+            PC_ = (h<<8)|l;
             return;
         }
 
-        case 0xD9: // ICALL
+        case 0xE2: // ICALL
         {
+            push_stack((PC_ & 0xFF00) >> 8);
+            push_stack(PC_ & 0x00FF);
+            PC_ = REG_Z + *k;
             return;
         }
 
-        case 0xDB: // IJMP
+        case 0xE3: // IJMP
         {
+            PC_ = REG_Z + *k;
             return;
         }
     }
@@ -182,102 +191,214 @@ void BlinkenBoxInstance::run_one_instruction()
     byte r = (*operand & 0x0F);
 
     switch (*instruction) {
-        case 0x2C: // MOV
-            return opcode_mov(d, r);
-        case 0x80: // LD
-            return opcode_ld(d);
-        case 0x82: // ST
-            return opcode_st(d);
-        case 0x05: // PUSH
-            return opcode_push(d);
-        case 0x01: // POP
-            return opcode_pop(d);
-
-        case 0x09: // LSL
-            return opcode_lsl(d);
-        case 0x1D: // LSR
-            return opcode_lsr(d);
-        case 0x98: // ROL
-            return opcode_rol(d);
-        case 0x99: // ROR
-            return opcode_ror(d);
-        case 0x11: // ASR
-            return opcode_asr(d);
-        case 0x06: // BCLR
-            return opcode_bclr(r & 0x7);
-        case 0x07: // BSET
-            return opcode_bset(r & 0x7);
-
-        case 0x10: // CPSE
-            return opcode_cpse(d, r);
-        case 0x14: // CP
-            return opcode_cp(d, r);
-        case 0x04: // CPC
-            return opcode_cpc(d, r);
-        case 0xD0: // RCALL
-            return opcode_rcall(*operand);
-        case 0xD1: // CALL
+        case 0x10: // LSL
         {
-            push_stack(PC_ & 0xFF);
-            push_stack((PC_ & 0xFF00) >> 8);
-            PC_ = *k;
+            byte old = *Rd;
+            *Rd = *Rd << 1;
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(old, 7));
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_NXORC();
+            UPDATE_SREG_SIGN();
+            return;
+        }
+git@gist.github.com:1257596.git
+        case 0x11: // LSR
+        {
+            byte old = *Rd;
+            *Rd = *Rd >> 1;
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(old, 0));
+            UPDATE_SREG_ZERO(*Rd);
+            BIT_CLR(SREG_, SREG_N);
+            UPDATE_SREG_OVERFLOW_NXORC();
+            UPDATE_SREG_SIGN();
             return;
         }
 
-        case 0xD3: // RJMP
-            return opcode_rjmp(*operand);
-        case 0xD7: // JMP
-            return opcode_jmp(*operand);
-        case 0xF0: // BRCS
-            return opcode_brcs(*operand);
-        case 0xF1: // BREQ
-            return opcode_breq(*operand);
-        case 0xF2: // BRMI
-            return opcode_brmi(*operand);
-        case 0xF4: // BRLT
-            return opcode_brlt(*operand);
-        case 0xF8: // BRCC
-            return opcode_brcc(*operand);
-        case 0xF9: // BRNE
-            return opcode_brne(*operand);
-        case 0xFA: // BRPL
-            return opcode_brpl(*operand);
-        case 0xFC: // BRGE
-            return opcode_brge(*operand);
-        case 0xFD: // SBRC
-            return opcode_sbrc(d, r & 0x7);
-        case 0xFE: // SBRS
-            return opcode_sbrs(d, r & 0x7);
+        case 0x12: // ROL
+        {
+            byte old = *Rd;
+            *Rd = (*Rd << 1) | BIT_VAL(SREG_, SREG_C);
 
-        case 0x96: // DEC
-            return opcode_dec(d);
-        case 0x97: // INC
-            return opcode_inc(d);
-        case 0x9A: // MUL
-            return opcode_mul(d, r);
-        case 0x02: // MULS
-            return opcode_muls(d, r);
-        case 0x03: // MULSU
-            return opcode_mulsu(d, r);
-        case 0x08: // SBC
-            return opcode_sbc(d, r);
-        case 0x0C: // ADD
-            return opcode_add(d, r);
-        case 0x18: // SUB
-            return opcode_sub(d, r);
-        case 0x1C: // ADC
-            return opcode_adc(d, r);
+            BIT_UP(SREG_, SREG_C, BIT_VAL(old, 7));
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_NXORC();
+            UPDATE_SREG_SIGN();
+            return;
+        }
 
-        case 0x20: // AND
-            return opcode_and(d, r);
-        case 0x24: // EOR
-            return opcode_eor(d, r);
-        case 0x28: // OR
-            return opcode_or(d, r);
-        case 0x91: // NEG
-            return opcode_neg(d);
-        case 0x94: // COM
-            return opcode_com(d);
+        case 0x13: // ROR
+        {
+            byte old = *Rd;
+            *Rd = (BIT_VAL(SREG_, SREG_C) << 8) | (*Rd >> 1);
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(old, 0));
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_NXORC();
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x14: // ASR
+        {
+            byte old = *Rd;
+            *Rd = (old & 0x80) | (*Rd >> 1);
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(old, 0));
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_NXORC();
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x15: // AND
+        {
+            *Rd &= REG_[r];
+
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            BIT_CLR(SREG_, SREG_V);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x16: // EOR
+        {
+            *Rd ^= REG_[r];
+
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            BIT_CLR(SREG_, SREG_V);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x17: // OR 
+        {
+            *Rd |= REG_[r];
+
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            BIT_CLR(SREG_, SREG_V);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x18: // NEG
+        {
+            *Rd = ~(*Rd) + 1; // twos complement
+
+            BIT_UP(SREG_, SREG_C, *Rd != 0);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            BIT_UP(SREG_, SREG_V, *Rd == 0x80);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x19: // COM
+        {
+            *Rd = ~(*Rd);
+
+            BIT_SET(SREG_, SREG_C);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            BIT_CLR(SREG_, SREG_V);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+
+        case 0x20: // ADD
+        {
+            byte old = *Rd;
+            *Rd += REG_[r];
+
+            UPDATE_SREG_CARRY(old, REG_[r], *Rd);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, REG_[r], *Rd);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x21: // ADC
+        {
+            byte old = *Rd;
+            *Rd += REG_[r] + BIT_VAL(SREG_, SREG_C);
+
+            UPDATE_SREG_CARRY(old, REG_[r], *Rd);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, REG_[r], *Rd);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x22: // SUB
+        {
+            byte old = *Rd;
+            *Rd -= REG_[r];
+
+            UPDATE_SREG_CARRY(old, REG_[r], *Rd);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, REG_[r], *Rd);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x23: // SBC
+        {
+            byte old = *Rd;
+            *Rd -= REG_[r] - BIT_VAL(SREG_, SREG_C);
+
+            UPDATE_SREG_CARRY(old, REG_[r], *Rd);
+            UPDATE_SREG_ZERO(*Rd);
+            UPDATE_SREG_NEG(*Rd);
+            UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(old, REG_[r], *Rd);
+            UPDATE_SREG_SIGN();
+            return;
+        }
+
+        case 0x24: // MUL
+        {
+            unsigned int result = (unsigned byte)(*Rd) * (unsigned byte)(REG_[r]);
+            REG_[0] = result & 0x00FF;
+            REG_[1] = (result & 0xFF00) >> 8;
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(result, 15));
+            UPDATE_SREG_ZERO(result);
+            return;
+        }
+
+        case 0x25: // MULS
+        {
+            signed int result = (signed byte)(*Rd) * (signed byte)(REG_[r]);
+            REG_[0] = result & 0x00FF;
+            REG_[1] = (result & 0xFF00) >> 8;
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(result, 15));
+            UPDATE_SREG_ZERO(result);
+            return;
+        }
+
+        case 0x26: // MULSU
+        {
+            signed int result = (signed byte)(*Rd) * (unsigned byte)(REG_[r]);
+            REG_[0] = result & 0x00FF;
+            REG_[1] = (result & 0xFF00) >> 8;
+
+            BIT_UP(SREG_, SREG_C, BIT_VAL(result, 15));
+            UPDATE_SREG_ZERO(result);
+            return;
+        }
+
     }
 
     return invalid_opcode(*instruction);
@@ -308,6 +429,7 @@ void *BlinkenBoxInstance::access_system_memory(int offset)
       return (byte*)(&SP_)+1;
     case 0xE1: //SPH
       return (byte*)(&SP_);
+    //TODO: finish mapping system memory page
   }  
 
 }
@@ -324,6 +446,29 @@ byte *BlinkenBoxInstance::fetch_instruction_byte()
 }
 
 
+void BlinkenBoxInstance::push_stack(byte value)
+{
+// FIXME: err... silently segfault on stack access?
+    byte *loc = (byte*)access_memory(SP_);
+    if (loc != 0) {
+        *loc = value;
+        SP_ -= 1;
+    }
+}
+
+byte BlinkenBoxInstance::pop_stack()
+{
+// FIXME: err... return 0 when segfault on stack access?
+    byte value = 0;
+    byte *loc = (byte*)access_memory(SP_);
+    if (loc != 0) {
+        value = *loc;
+        SP_ += 1;
+    }
+    return value;
+}
+
+
 
 void BlinkenBoxInstance::invalid_opcode(byte instruction)
 {
@@ -332,237 +477,4 @@ void BlinkenBoxInstance::segfault(int address)
 {
 }
 
-
-
-/*
- * opcode functions
- *
- */
-void BlinkenBoxInstance::opcode_cpi(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_sbci(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_subi(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_ori(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_andi(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_lds(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_ldi(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_sts(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_sbr(byte d, byte k)
-{
-}
-
-void BlinkenBoxInstance::opcode_halt()
-{
-}
-
-void BlinkenBoxInstance::opcode_nop()
-{
-}
-
-void BlinkenBoxInstance::opcode_ret()
-{
-}
-
-void BlinkenBoxInstance::opcode_icall()
-{
-}
-
-void BlinkenBoxInstance::opcode_ijmp()
-{
-}
-
-void BlinkenBoxInstance::opcode_mov(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_ld(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_st(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_push(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_pop(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_lsl(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_lsr(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_rol(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_ror(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_asr(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_bclr(byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_bset(byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_cpse(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_cp(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_cpc(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_rcall(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_call(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_rjmp(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_jmp(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brcs(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_breq(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brmi(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brlt(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brcc(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brne(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brpl(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_brge(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_sbrc(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_sbrs(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_dec(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_inc(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_mul(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_muls(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_mulsu(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_sbc(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_add(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_sub(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_adc(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_and(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_eor(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_or(byte d, byte r)
-{
-}
-
-void BlinkenBoxInstance::opcode_neg(byte d)
-{
-}
-
-void BlinkenBoxInstance::opcode_com(byte d)
-{
-}
 

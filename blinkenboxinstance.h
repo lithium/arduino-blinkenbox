@@ -17,6 +17,31 @@
 #define SREG_S   4
 
 
+#define REG_Z    ((REG_[0xF] << 8) | REG_[0xE])
+
+
+// set SREG_V if a  two's complement overflow resulted from the operation; cleared otherwise.
+#define UPDATE_SREG_OVERFLOW_TWOSCOMPLEMENT(Rd, K, R)         BIT_UP(SREG_, SREG_V, \
+    (BIT_VAL((Rd), 7) & ~BIT_VAL((K), 7) & ~BIT_VAL((R), 7)) \
+  | (~BIT_VAL((Rd), 7) & BIT_VAL((K), 7) & BIT_VAL((R), 7)))
+// N xor C (for N and C after the shift)
+#define UPDATE_SREG_OVERFLOW_NXORC()      BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_C))
+// set SREG_C if the absolute value of K is larger than the absolute value of Rd; cleared othwerise.
+#define UPDATE_SREG_CARRY(Rd, K, R)             BIT_UP(SREG_, SREG_C, \
+    (~BIT_VAL((Rd), 7) & BIT_VAL((K), 7)) \
+  | (BIT_VAL((K), 7) & BIT_VAL((R), 7)) \
+  | (BIT_VAL((R), 7) & BIT_VAL((Rd), 7)))
+//set if the result is 0; cleared otherwise.
+#define UPDATE_SREG_ZERO(R)     BIT_UP(SREG_, SREG_Z, (R) == 0)
+// set if MSB of the result is set; cleared otherwise.
+#define UPDATE_SREG_NEG(R)      BIT_UP(SREG_, SREG_N, BIT_VAL((R),7))
+// N xor V, for signed tests.
+#define UPDATE_SREG_SIGN()      BIT_SET(SREG_, SREG_S, BIT_VAL(SREG_, SREG_N) ^ BIT_VAL(SREG_, SREG_V))
+
+//previous value remains unchanged when the result is zero; cleared otherwise.
+#define UPDATE_SREG_ZERO_IFCHANGED(R)      if ((R) != 0) BIT_CLR(SREG_, SREG_Z)
+
+
 class BlinkenBoxInstance {
 
   public:
@@ -41,6 +66,8 @@ class BlinkenBoxInstance {
     void *access_memory(int address);
     void *access_system_memory(int offset);
     byte *fetch_instruction_byte();
+    void push_stack(byte value);
+    byte pop_stack();
 
     void run_one_instruction();
 
@@ -50,64 +77,6 @@ class BlinkenBoxInstance {
 
 
 
-    void opcode_cpi(byte d, byte k);
-    void opcode_sbci(byte d, byte k);
-    void opcode_subi(byte d, byte k);
-    void opcode_ori(byte d, byte k);
-    void opcode_andi(byte d, byte k);
-    void opcode_lds(byte d, byte k);
-    void opcode_ldi(byte d, byte k);
-    void opcode_sts(byte d, byte k);
-    void opcode_sbr(byte d, byte k);
-    void opcode_halt();
-    void opcode_nop();
-    void opcode_ret();
-    void opcode_icall();
-    void opcode_ijmp();
-    void opcode_mov(byte d, byte r);
-    void opcode_ld(byte d);
-    void opcode_st(byte d);
-    void opcode_push(byte d);
-    void opcode_pop(byte d);
-    void opcode_lsl(byte d);
-    void opcode_lsr(byte d);
-    void opcode_rol(byte d);
-    void opcode_ror(byte d);
-    void opcode_asr(byte d);
-    void opcode_bclr(byte r);
-    void opcode_bset(byte r);
-    void opcode_cpse(byte d, byte r);
-    void opcode_cp(byte d, byte r);
-    void opcode_cpc(byte d, byte r);
-    void opcode_rcall(byte d);
-    void opcode_call(byte d);
-    void opcode_rjmp(byte d);
-    void opcode_jmp(byte d);
-    void opcode_brcs(byte d);
-    void opcode_breq(byte d);
-    void opcode_brmi(byte d);
-    void opcode_brlt(byte d);
-    void opcode_brcc(byte d);
-    void opcode_brne(byte d);
-    void opcode_brpl(byte d);
-    void opcode_brge(byte d);
-    void opcode_sbrc(byte d, byte r);
-    void opcode_sbrs(byte d, byte r);
-    void opcode_dec(byte d);
-    void opcode_inc(byte d);
-    void opcode_mul(byte d, byte r);
-    void opcode_muls(byte d, byte r);
-    void opcode_mulsu(byte d, byte r);
-    void opcode_sbc(byte d, byte r);
-    void opcode_add(byte d, byte r);
-    void opcode_sub(byte d, byte r);
-    void opcode_adc(byte d, byte r);
-    void opcode_and(byte d, byte r);
-    void opcode_eor(byte d, byte r);
-    void opcode_or(byte d, byte r);
-    void opcode_neg(byte d);
-    void opcode_com(byte d);
-    
 };
 
 #endif
