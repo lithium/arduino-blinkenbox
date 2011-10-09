@@ -11,8 +11,13 @@ BlinkenBoxInstance::BlinkenBoxInstance()
     MEMORY_[i] = 0;
   }
   //map user memory pages
+#ifdef ARDUINO
   MEMORY_[0] = (byte*)USER_PAGE0_RAM_OFFSET;
   MEMORY_[1] = (byte*)USER_PAGE1_RAM_OFFSET;
+#else
+  MEMORY_[0] = (byte*)malloc(256);
+  MEMORY_[1] = (byte*)malloc(256);
+#endif
 
   //initialize the internal registers
   SP_ = 0x01FF;
@@ -472,7 +477,7 @@ void BlinkenBoxInstance::run_one_instruction()
 
         case 0xC2: // CPSE
         {
-            if (*Rd = REG_[r]) {
+            if (*Rd == REG_[r]) {
                 skip_next_instruction();
             }
             return;

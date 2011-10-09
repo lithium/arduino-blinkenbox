@@ -1,7 +1,16 @@
 #ifndef BLINKENBOXINSTANCE_H
 #define BLINKENBOXINSTANCE_H
 
+#ifdef ARDUINO
 #include <WProgram.h>
+
+#else
+
+#include "stdlib.h"
+
+typedef unsigned char byte;
+
+#endif
 
 
 #define BIT_SET(w, b)   (w) |= 1<<(b)
@@ -48,11 +57,9 @@ class BlinkenBoxInstance {
     BlinkenBoxInstance();
     ~BlinkenBoxInstance();
     
-    void run();
-    
-  private:
-    bool running_;
 
+
+    bool running_;
     int SP_;
     int PC_;
     byte REG_[16];        // 16x 8bit registers
@@ -60,22 +67,22 @@ class BlinkenBoxInstance {
     byte *MEMORY_[16];  // 16x possible memory pages
     
     
-    
-
-    
     void *access_memory(int address);
+    void run();
+    void run_one_instruction();
+
+
+private:
+
     void *access_system_memory(int offset);
     byte *fetch_instruction_byte();
     void push_stack(byte value);
     byte pop_stack();
 
-    void run_one_instruction();
     void skip_next_instruction();
 
     void invalid_opcode(byte opcode);
     void segfault(int address);
-
-
 
 
 };
